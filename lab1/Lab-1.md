@@ -1,4 +1,4 @@
-#**练习一**#
+# **练习一**#
 阅读 kern/init/entry.S内容代码，结合操作系统内核启动流程，说明指令 la sp, bootstacktop 完成了什么操作，目的是什么？ tail kern_init 完成了什么操作，目的是什么？
 ##**la sp, bootstacktop **指令##
 操作：la 指令将bootstacktop标签所代表的内存地址加载到栈指针寄存器（sp）中。
