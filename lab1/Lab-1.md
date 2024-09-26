@@ -18,12 +18,10 @@
 
 帮助跳转至内核入口点*kern_init*函数，并随后完成其他初始化工作。
 
-``#include<iostream>
-using namespace std;
-int main()
+```
 {
-
+  "firstName": "John",
+  "lastName": "Smith",
+  "age": 25
 }
-
-
-``
+```
