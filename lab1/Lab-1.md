@@ -90,7 +90,7 @@ void interrupt_handler(struct trapframe `tf) {
 ---
 
 
-# **扩增练习 Challenge2** 
+# **扩展练习 Challenge2** 
 在`trapentry.S`中汇编代码 `csrw sscratch`, `sp`；`csrrw s0`, `sscratch`, `x0`实现了什么操作，目的是什么？`save all`里面保存了`stval scause`这些`csr`，而在`restore all`里面却不还原它们？那这样`store`的意义何在呢？
 ### Challenge 2：理解上下文切换机制
 
