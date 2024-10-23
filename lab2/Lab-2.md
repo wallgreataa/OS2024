@@ -2,11 +2,11 @@
 
 # 实验二实验报告
 
-</center>
+## **实验名称：物理内存和页表**   
 
-实验名称：物理内存和页表   
 
-</center>
+
+---
 
 ## 一、实验目的
 
@@ -16,15 +16,17 @@
 
 * 明白页的分配方法
 
+---
+
 ## 二、实验过程
 
-### 1.练习一：理解first-fit 连续物理内存分配算法（思考题）
+### 1.练习一：理解 first-fit 连续物理内存分配算法（思考题）
 
 **First-Fit** 内存分配算法的基本思想是：内存管理器维护一个空闲块列表，当接收到内存分配请求时，它会扫描列表并找到第一个足够大的空闲块。如果找到的块比请求的大得多，通常会将其拆分，剩余部分作为新的空闲块继续留在列表中。
 
 在本实验中该算法的实现位于`default_pmm.c`文件中，在该文件实现了对于内存页面的分配、释放等操作。下面我们对该文件中的四个主要函数:`default_init`、`default_init_memmap`、`default_alloc_pages`、`default_free_pages`分别进行分析。
 
-#### default_init()
+#### 页面初始化1
 
 ```c
 free_area_t free_area;
@@ -45,7 +47,7 @@ default_init(void) {
 
 * 初始化 `nr_free` 为 0，表示当前系统还没有任何空闲页面。随着系统的运行，后续通过函数 `default_init_memmap` 向链表中添加空闲页面时，`nr_free` 会被增加，以反映当前系统中实际的空闲内存块数量。
 
-#### default_init_memmap()
+#### 页面初始化2
 
 `default_init_memmap()` 函数的主要作用是初始化一块指定的物理内存区域，将这块区域标记为空闲，并将其加入到管理空闲内存的链表 `free_list` 中，同时更新空闲页面的总数 `nr_free`。这个函数在内存管理系统中负责管理和初始化新的一块可用内存块。其具体代码如下：
 
@@ -97,7 +99,7 @@ default_init_memmap(struct Page *base, size_t n) {
 
 * 总结：`default_init_memmap()`一共做了4件事：1）初始化每个页面，将它们标记为空闲；2）设置第一个页面的 `property` 属性，表示该空闲块的大小；3）更新系统的空闲页面总数 `nr_free`；4）将新初始化的空闲块插入到空闲链表中，确保链表按地址顺序排列。
 
-#### default_alloc_pages()
+#### 页面分配
 
 `default_alloc_pages(size_t n)` 是一个用于分配页面的函数，依据 **First-Fit** 内存分配算法来实现。在该函数中，内存管理系统从空闲内存块链表中找到第一个大小足够的块，分配所请求的页面数 `n`，如果找到的块比需要的页面数多，还会将剩余的部分重新作为空闲块插入到链表中。这个函数实现了基本的内存页面分配功能。  其代码如下所示：
 
@@ -155,7 +157,7 @@ default_alloc_pages(size_t n) {
 
 * 最后返回`page`，以供调用者使用，如果没有则返回`NULL`。
 
-#### default_free_pages（）
+#### 页面释放
 
 `default_free_pages(struct Page *base, size_t n)` 函数的作用是释放从 `base` 开始的 `n` 个连续页面，并将它们重新插入到空闲页面链表 `free_list` 中。函数还会尝试将相邻的空闲页面合并，避免内存碎片的产生。其代码如下所示：
 
@@ -232,4 +234,152 @@ static void default_free_pages(struct Page *base, size_t n) {
 
 通过对以上四个函数的分析，我们对`first-fit` 连续物理内存分配算法有了基本的了解。系统启动后，我们把`pmm_manager`的值赋值为`default_pmm_manager`，从而使得操作系统使用`default_pmm_manager`中的这些物理页的分配和释放的方法来管理物理内存。
 
+---
 
+### 2.练习二：实现 Best-Fit 连续物理内存分配算法（需要编程）
+
+#### 设计与实现过程
+
+**Best-Fit** 内存分配算法的基本思想是：当接收到内存分配请求时，内存管理器会遍历空闲块列表，找到**大小最接近但足够大的空闲块**进行分配。如果找到的块比请求的大得多，通常会将其拆分，剩余部分作为新的空闲块继续留在列表中。Best-Fit 相比于 First-Fit 算法更擅长减少碎片化，但查找过程较慢，因为它需要遍历整个列表。
+
+在本实验中，Best-Fit 算法的实现主要通过两个函数实现内存的分配和释放，分别是：`best_fit_alloc_pages` 和 `best_fit_free_pages`。其余函数均采取原方案，下面对这两个函数进行分析。
+
+
+##### 页面分配
+`best_fit_alloc_pages` 的作用是从空闲页面链表中找到一个大小最接近且足够大的块来满足分配请求。该块如果比所需页面数多，会进行拆分，将剩余部分保留在空闲链表中。
+
+```c
+static struct Page *
+best_fit_alloc_pages(size_t n) {
+    assert(n > 0);
+    if (n > nr_free) {
+        return NULL;
+    }
+
+    struct Page *best_page = NULL;
+    list_entry_t *le = &free_list;
+    size_t best_fit_size = SIZE_MAX;
+
+    while ((le = list_next(le)) != &free_list) {
+        struct Page *p = le2page(le, page_link);
+        if (p->property >= n && p->property < best_fit_size) {
+            best_page = p;
+            best_fit_size = p->property;
+        }
+    }
+
+    if (best_page != NULL) {
+        list_entry_t *prev = list_prev(&(best_page->page_link));
+        list_del(&(best_page->page_link));
+
+        if (best_page->property > n) {
+            struct Page *p = best_page + n;
+            p->property = best_page->property - n;
+            SetPageProperty(p);
+            list_add(prev, &(p->page_link));
+        }
+
+        nr_free -= n;
+        ClearPageProperty(best_page);
+    }
+
+    return best_page;
+}
+```
+- 检查请求页面数是否合理：
+`best_fit_alloc_pages` 函数是 `Best-Fit` 算法的核心实现。函数首先使用 `assert(n > 0)` 确保请求的页面数` n` 大于 0，表示这是一个有效的请求。如果系统中空闲页面总数不足，则返回 `NULL`。
+
+- 遍历空闲链表：
+通过 `while` 循环遍历整个空闲链表 `free_list`，检查每个空闲块的 `property` 值，判断它是否能够满足请求页面数 `n`。具体来说，条件 `p->property >= n` 确保当前空闲块的大小至少能满足请求，`p->property < best_fit_size` 确保当前找到的块比之前找到的最小块更合适。遍历过程中，`best_page` 会更新为最合适的空闲块，`best_fit_size` 记录该块的大小。
+
+- 找到合适的块后进行分配：
+如果找到最合适的块 `best_page`，则从链表中移除该块。如果该块比请求的页面数多（即 `p->property > n`），则将多余的页面拆分成一个新的块，并将其重新插入到空闲链表中。拆分后的块的大小为原块大小减去请求页面数 `n`。
+
+- 更新全局变量并返回：
+最后，减少全局变量 `nr_free` 中的空闲页面数，并清除分配块的 `PG_property` 标志，标志它已经被分配。然后返回找到并分配的 `Page` 块。
+
+##### 页面释放
+`best_fit_free_pages` 函数的作用是释放从 `base` 开始的 `n` 个连续页面，并将它们重新插入到空闲链表`free_list` 中。函数还会尝试将相邻的空闲块进行合并，减少内存碎片。
+
+```c
+static void
+best_fit_free_pages(struct Page *base, size_t n) {
+    assert(n > 0);
+    struct Page *p = base;
+    for (; p != base + n; p++) {
+        assert(!PageReserved(p) && !PageProperty(p));
+        p->flags = 0;
+        set_page_ref(p, 0);
+    }
+    base->property = n;
+    SetPageProperty(base);
+    nr_free += n;
+
+    if (list_empty(&free_list)) {
+        list_add(&free_list, &(base->page_link));
+    } else {
+        list_entry_t *le = &free_list;
+        while ((le = list_next(le)) != &free_list) {
+            struct Page *page = le2page(le, page_link);
+            if (base < page) {
+                list_add_before(le, &(base->page_link));
+                break;
+            } else if (list_next(le) == &free_list) {
+                list_add(le, &(base->page_link));
+            }
+        }
+    }
+
+    list_entry_t *le = list_prev(&(base->page_link));
+    if (le != &free_list) {
+        p = le2page(le, page_link);
+        if (p + p->property == base) {
+            p->property += base->property;
+            ClearPageProperty(base);
+            list_del(&(base->page_link));
+            base = p;
+        }
+    }
+
+    le = list_next(&(base->page_link));
+    if (le != &free_list) {
+        p = le2page(le, page_link);
+        if (base + base->property == p) {
+            base->property += p->property;
+            ClearPageProperty(p);
+            list_del(&(p->page_link));
+        }
+    }
+}
+```
+- 初始化和安全检查：
+函数首先检查释放的页面数是否大于 0，确保这是一个有效的操作。然后遍历每个页面，检查它们是否可以安全释放。通过 `assert(!PageReserved(p) && !PageProperty(p))`，确保页面没有被保留并且不是空闲块。释放的页面的标志位被清除，引用计数重置。
+
+- 设置空闲块的属性：
+将 `base->property` 设置为 `n`，表示从 `base` 开始的连续 `n` 个页面是一个新的空闲块，并通过 `SetPageProperty` 标记这个块为可用。然后将 `nr_free` 加上 `n`，更新系统中的空闲页面总数。
+
+- 插入到空闲链表：
+接着检查空闲链表 `free_list` 是否为空。如果空链表为空，直接将新的空闲块插入链表；否则，遍历链表找到合适的位置插入新块，保证链表保持按地址有序的状态。
+
+- 合并相邻的空闲块：
+
+与前面块合并：检查当前块的前一个块 `p` 是否与 `base` 相邻。如果前一个块的结束地址与当前块的起始地址相同，则将它们合并为一个更大的块。
+与后面块合并：同样检查当前块的后一个块 `p`，如果当前块的结束地址与后一个块的起始地址相邻，也可以合并。
+
+- 更新链表：
+如果发生合并，合并后的块将被更新为新的空闲块，原来的块则从链表中移除。
+
+#### 2. Best-Fit 算法是否有进一步的改进空间？
+
+1. **查找效率的提升**：
+   - 目前的 `Best-Fit` 实现通过遍历整个空闲链表寻找最适合的块，这种方式的时间复杂度为 O(n)，对于大规模系统来说，查找开销较大。
+   - 可以考虑使用更高效的数据结构，例如**平衡二叉树**或**堆**，来加速查找过程，使得查找复杂度降低为 O(log n)。通过这样的改进，分配效率可以得到显著提升。
+
+2. **碎片管理的优化**：
+   - `Best-Fit` 虽然能减少碎片化，但随着内存分配和释放的反复进行，系统中仍可能出现较小的、难以利用的碎片。
+   - 进一步的改进可以引入**内存整理**机制，定期扫描和整理内存，将零散的碎片合并为连续的内存块，以提升大块内存分配的效率。
+
+---
+### 实验总结
+
+*通过实验，掌握了页表建立及管理物理内存的方法，理解了 First-Fit 和 Best-Fit 算法的具体实现。*
