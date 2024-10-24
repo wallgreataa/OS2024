@@ -258,7 +258,7 @@ best_fit_alloc_pages(size_t n) {
 
     struct Page *best_page = NULL;
     list_entry_t *le = &free_list;
-    size_t best_fit_size = SIZE_MAX;
+    size_t best_fit_size = nr_free +1;
 
     while ((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link);
