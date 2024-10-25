@@ -289,8 +289,8 @@ basic_check(void)
     struct Page *p0, *p1, *p2;
     p0 = p1 = p2 = NULL;
 
-    cprintf("首先p0请求5页\n");
-    p0 = alloc_pages(5);
+    cprintf("首先p0请求15页\n");
+    p0 = alloc_pages(15);
     show_buddy_array(0, MAX_BUDDY_ORDER);
 
     cprintf("然后p1请求5页\n");
@@ -323,7 +323,7 @@ basic_check(void)
 
     // 清空看nr_free能不能变
     cprintf("释放p0中。。。。。。\n");
-    free_pages(p0, 5);
+    free_pages(p0, 15);
     cprintf("释放p0后，总空闲块数目为：%d\n", nr_free); // 变成了8
     show_buddy_array(0, MAX_BUDDY_ORDER);
 
@@ -358,7 +358,7 @@ buddy_system_check(void)
 
     // 一些复杂的操作
     cprintf("==========开始测试一些复杂的例子==========\n");
-    cprintf("首先p0请求5页\n");
+    cprintf("首先p0请求15页\n");
     struct Page *p0 = alloc_pages(5), *p1, *p2;
     assert(p0 != NULL);
     assert(!PageProperty(p0));
