@@ -590,7 +590,7 @@ best_fit_free_pages(struct Page *base, size_t n) {
 
 ---
 
-## 知识点汇总
+## 三、知识点汇总
 
 ### 1. 内存管理的连续分配策略
 - **实验相关知识点**：包含First-Fit算法、Best-Fit算法和Buddy System
