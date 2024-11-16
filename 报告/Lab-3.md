@@ -236,111 +236,111 @@
 
 **代码实现** ：
 
-```c
-int
-do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
-    int ret = -E_INVAL;
-    //try to find a vma which include addr
-    struct vma_struct *vma = find_vma(mm, addr);
-
-    pgfault_num++;
-    //If the addr is in the range of a mm's vma?
-    if (vma == NULL || vma->vm_start > addr) {
-        cprintf("not valid addr %x, and  can not find it in vma\n", addr);
-        goto failed;
-    }
-
-    /* IF (write an existed addr ) OR
-     *    (write an non_existed addr && addr is writable) OR
-     *    (read  an non_existed addr && addr is readable)
-     * THEN
-     *    continue process
-     */
-    uint32_t perm = PTE_U;
-    if (vma->vm_flags & VM_WRITE) {
-        perm |= (PTE_R | PTE_W);
-    }
-    addr = ROUNDDOWN(addr, PGSIZE);
-
-    ret = -E_NO_MEM;
-
-    pte_t *ptep=NULL;
-    /*
-    * Maybe you want help comment, BELOW comments can help you finish the code
-    *
-    * Some Useful MACROs and DEFINEs, you can use them in below implementation.
-    * MACROs or Functions:
-    *   get_pte : get an pte and return the kernel virtual address of this pte for la
-    *             if the PT contians this pte didn't exist, alloc a page for PT (notice the 3th parameter '1')
-    *   pgdir_alloc_page : call alloc_page & page_insert functions to allocate a page size memory & setup
-    *             an addr map pa<--->la with linear address la and the PDT pgdir
-    * DEFINES:
-    *   VM_WRITE  : If vma->vm_flags & VM_WRITE == 1/0, then the vma is writable/non writable
-    *   PTE_W           0x002                   // page table/directory entry flags bit : Writeable
-    *   PTE_U           0x004                   // page table/directory entry flags bit : User can access
-    * VARIABLES:
-    *   mm->pgdir : the PDT of these vma
-    *
-    */
-
-
-    ptep = get_pte(mm->pgdir, addr, 1);  //(1) try to find a pte, if pte's
-                                         //PT(Page Table) isn't existed, then
-                                         //create a PT.
-
-    if(ptep==NULL){
-        cprintf("get_pte in do_pgfault failed\n");
-        goto failed;
-    }
-
-    if (*ptep == 0) {
-        if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) {
-            cprintf("pgdir_alloc_page in do_pgfault failed\n");
-            goto failed;
-        }
-    } else {
-        /*LAB3 EXERCISE 3: 2213912
-        * 请你根据以下信息提示，补充函数
-        * 现在我们认为pte是一个交换条目，那我们应该从磁盘加载数据并放到带有phy addr的页面，
-        * 并将phy addr与逻辑addr映射，触发交换管理器记录该页面的访问情况
-        *
-        *  一些有用的宏和定义，可能会对你接下来代码的编写产生帮助(显然是有帮助的)
-        *  宏或函数:
-        *    swap_in(mm, addr, &page) : 分配一个内存页，然后根据
-        *    PTE中的swap条目的addr，找到磁盘页的地址，将磁盘页的内容读入这个内存页
-        *    page_insert ： 建立一个Page的phy addr与线性addr la的映射
-        *    swap_map_swappable ： 设置页面可交换
+   ```c
+   int
+   do_pgfault(struct mm_struct *mm, uint_t error_code, uintptr_t addr) {
+       int ret = -E_INVAL;
+       //try to find a vma which include addr
+       struct vma_struct *vma = find_vma(mm, addr);
+   
+       pgfault_num++;
+       //If the addr is in the range of a mm's vma?
+       if (vma == NULL || vma->vm_start > addr) {
+           cprintf("not valid addr %x, and  can not find it in vma\n", addr);
+           goto failed;
+       }
+   
+       /* IF (write an existed addr ) OR
+        *    (write an non_existed addr && addr is writable) OR
+        *    (read  an non_existed addr && addr is readable)
+        * THEN
+        *    continue process
         */
-
-        if (swap_init_ok) {
-            struct Page *page = NULL;
-            // 你要编写的内容在这里，请基于上文说明以及下文的英文注释完成代码编写
-            //(1）According to the mm AND addr, try
-            //to load the content of right disk page
-            //into the memory which page managed.
-            //(2) According to the mm,
-            //addr AND page, setup the
-            //map of phy addr <--->
-            //logical addr
-            //(3) make the page swappable.
-            if ((ret = swap_in(mm, addr, &page)) != 0) {
-                cprintf("swap_in in do_pgfault failed\n");
-                goto failed;
-            }    
-            page_insert(mm->pgdir, page, addr, perm);
-            swap_map_swappable(mm, addr, page, 1);
-            page->pra_vaddr = addr;
-        } else {
-            cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);
-            goto failed;
-        }
+       uint32_t perm = PTE_U;
+       if (vma->vm_flags & VM_WRITE) {
+           perm |= (PTE_R | PTE_W);
+       }
+       addr = ROUNDDOWN(addr, PGSIZE);
+   
+       ret = -E_NO_MEM;
+   
+       pte_t *ptep=NULL;
+       /*
+       * Maybe you want help comment, BELOW comments can help you finish the code
+       *
+       * Some Useful MACROs and DEFINEs, you can use them in below implementation.
+       * MACROs or Functions:
+       *   get_pte : get an pte and return the kernel virtual address of this pte for la
+       *             if the PT contians this pte didn't exist, alloc a page for PT (notice the 3th parameter '1')
+       *   pgdir_alloc_page : call alloc_page & page_insert functions to allocate a page size memory & setup
+       *             an addr map pa<--->la with linear address la and the PDT pgdir
+       * DEFINES:
+       *   VM_WRITE  : If vma->vm_flags & VM_WRITE == 1/0, then the vma is writable/non writable
+       *   PTE_W           0x002                   // page table/directory entry flags bit : Writeable
+       *   PTE_U           0x004                   // page table/directory entry flags bit : User can access
+       * VARIABLES:
+       *   mm->pgdir : the PDT of these vma
+       *
+       */
+   
+   
+       ptep = get_pte(mm->pgdir, addr, 1);  //(1) try to find a pte, if pte's
+                                            //PT(Page Table) isn't existed, then
+                                            //create a PT.
+   
+       if(ptep==NULL){
+           cprintf("get_pte in do_pgfault failed\n");
+           goto failed;
+       }
+   
+       if (*ptep == 0) {
+           if (pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) {
+               cprintf("pgdir_alloc_page in do_pgfault failed\n");
+               goto failed;
+           }
+       } else {
+           /*LAB3 EXERCISE 3: 2213912
+           * 请你根据以下信息提示，补充函数
+           * 现在我们认为pte是一个交换条目，那我们应该从磁盘加载数据并放到带有phy addr的页面，
+           * 并将phy addr与逻辑addr映射，触发交换管理器记录该页面的访问情况
+           *
+           *  一些有用的宏和定义，可能会对你接下来代码的编写产生帮助(显然是有帮助的)
+           *  宏或函数:
+           *    swap_in(mm, addr, &page) : 分配一个内存页，然后根据
+           *    PTE中的swap条目的addr，找到磁盘页的地址，将磁盘页的内容读入这个内存页
+           *    page_insert ： 建立一个Page的phy addr与线性addr la的映射
+           *    swap_map_swappable ： 设置页面可交换
+           */
+   
+           if (swap_init_ok) {
+               struct Page *page = NULL;
+               // 你要编写的内容在这里，请基于上文说明以及下文的英文注释完成代码编写
+               //(1）According to the mm AND addr, try
+               //to load the content of right disk page
+               //into the memory which page managed.
+               //(2) According to the mm,
+               //addr AND page, setup the
+               //map of phy addr <--->
+               //logical addr
+               //(3) make the page swappable.
+               if ((ret = swap_in(mm, addr, &page)) != 0) {
+                   cprintf("swap_in in do_pgfault failed\n");
+                   goto failed;
+               }    
+               page_insert(mm->pgdir, page, addr, perm);
+               swap_map_swappable(mm, addr, page, 1);
+               page->pra_vaddr = addr;
+           } else {
+               cprintf("no swap_init_ok but ptep is %x, failed\n", *ptep);
+               goto failed;
+           }
+      }
+   
+      ret = 0;
+   failed:
+       return ret;
    }
-
-   ret = 0;
-failed:
-    return ret;
-}
-```
+   ```
 
 - **定义一个页面结构体指针：**
   
@@ -445,19 +445,19 @@ failed:
 
 ##### 1. **_clock_init_mm**函数
 
-```c
-static int _clock_init_mm(struct mm_struct *mm)
-{     
-    /*LAB3 EXERCISE 4: 2113997*/ 
-    // 初始化pra_list_head为空链表
-    // 初始化当前指针curr_ptr指向pra_list_head，表示当前页面替换位置为链表头
-    // 将mm的私有成员指针指向pra_list_head，用于后续的页面替换算法操作
-    list_init(&pra_list_head);
-    curr_ptr = &pra_list_head;
-    mm->sm_priv = &pra_list_head;
-    return 0;
-}
-```
+   ```c
+   static int _clock_init_mm(struct mm_struct *mm)
+   {     
+       /*LAB3 EXERCISE 4: 2113997*/ 
+       // 初始化pra_list_head为空链表
+       // 初始化当前指针curr_ptr指向pra_list_head，表示当前页面替换位置为链表头
+       // 将mm的私有成员指针指向pra_list_head，用于后续的页面替换算法操作
+       list_init(&pra_list_head);
+       curr_ptr = &pra_list_head;
+       mm->sm_priv = &pra_list_head;
+       return 0;
+   }
+   ```
 
 在该函数中，我们需要执行以下操作：
 - 使用 `list_init` 初始化 `pra_list_head` 为空链表。
@@ -466,63 +466,63 @@ static int _clock_init_mm(struct mm_struct *mm)
 
 ##### 2. **_clock_map_swappable**函数
 
-```c
-static int _clock_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int swap_in)
-{
-    list_entry_t *entry = &(page->pra_page_link);
-    
-    assert(entry != NULL && curr_ptr != NULL);
-    // 记录页面访问情况
-    /*LAB3 EXERCISE 4: 2113997*/ 
-    // 将页面page插入到页面链表pra_list_head的末尾
-    // 将页面的visited标志置为1，表示该页面已被访问
-    list_entry_t *head = (list_entry_t*) mm->sm_priv;
-    list_add(head, entry);
-    page->visited = 1;
-    return 0;
-}
-```
+   ```c
+   static int _clock_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int swap_in)
+   {
+       list_entry_t *entry = &(page->pra_page_link);
+       
+       assert(entry != NULL && curr_ptr != NULL);
+       // 记录页面访问情况
+       /*LAB3 EXERCISE 4: 2113997*/ 
+       // 将页面page插入到页面链表pra_list_head的末尾
+       // 将页面的visited标志置为1，表示该页面已被访问
+       list_entry_t *head = (list_entry_t*) mm->sm_priv;
+       list_add(head, entry);
+       page->visited = 1;
+       return 0;
+   }
+   ```
 
 在这个函数中，我们采用了反向插入的方式，将页面插入到链表头部（`head`指向的链表项的下一个位置，之后实现遍历的时候则从链表尾向前遍历链表，与此同时，将页面的 `visited` 标志位设置为 1，表示该页面已被访问。
 
 ##### 3. **_clock_swap_out_victim**函数
 
-```c
-static int _clock_swap_out_victim(struct mm_struct *mm, struct Page **ptr_page, int in_tick)
-{
-    list_entry_t *head = (list_entry_t*) mm->sm_priv;
-    assert(head != NULL);
-    assert(in_tick == 0);
-    
-    /* 选择需要换出的页面 */
-    // (1) 遍历链表，查找最早的未被访问页面
-    // (2) 如果找到未被访问的页面，则从链表中删除该页面，并将其地址赋给ptr_page作为换出页面
-    while (1) {
-        /*LAB3 EXERCISE 4: 2113997*/ 
-        // 编写代码：遍历链表pra_list_head，查找未被访问的页面
-        if (curr_ptr == head) {
-            curr_ptr = list_prev(curr_ptr);
-            continue;
-        }
-
-        struct Page *curr_page = le2page(curr_ptr, pra_page_link);
-        if (curr_page->visited == 0) {
-            // 如果页面未被访问，则选择该页面进行换出
-            cprintf("curr_ptr %p\n", curr_ptr);
-            curr_ptr = list_prev(curr_ptr);
-            list_del(list_next(curr_ptr));
-            *ptr_page = curr_page;
-            return 0;
-        }
-
-        // 如果页面已被访问，则将其visited标志清除，继续遍历下一个页面
-        curr_page->visited = 0;
-        curr_ptr = list_prev(curr_ptr);
-    }
-
-    return 0;
-}
-```
+   ```c
+   static int _clock_swap_out_victim(struct mm_struct *mm, struct Page **ptr_page, int in_tick)
+   {
+       list_entry_t *head = (list_entry_t*) mm->sm_priv;
+       assert(head != NULL);
+       assert(in_tick == 0);
+       
+       /* 选择需要换出的页面 */
+       // (1) 遍历链表，查找最早的未被访问页面
+       // (2) 如果找到未被访问的页面，则从链表中删除该页面，并将其地址赋给ptr_page作为换出页面
+       while (1) {
+           /*LAB3 EXERCISE 4: 2113997*/ 
+           // 编写代码：遍历链表pra_list_head，查找未被访问的页面
+           if (curr_ptr == head) {
+               curr_ptr = list_prev(curr_ptr);
+               continue;
+           }
+   
+           struct Page *curr_page = le2page(curr_ptr, pra_page_link);
+           if (curr_page->visited == 0) {
+               // 如果页面未被访问，则选择该页面进行换出
+               cprintf("curr_ptr %p\n", curr_ptr);
+               curr_ptr = list_prev(curr_ptr);
+               list_del(list_next(curr_ptr));
+               *ptr_page = curr_page;
+               return 0;
+           }
+   
+           // 如果页面已被访问，则将其visited标志清除，继续遍历下一个页面
+           curr_page->visited = 0;
+           curr_ptr = list_prev(curr_ptr);
+       }
+   
+       return 0;
+   }
+   ```
 
 在 `clock_swap_out_victim` 函数中，我们实现了如下功能：
 - 遍历页面链表 `pra_list_head`，从链表尾部（即环形链表的前一项）向前检查每个页面。
@@ -543,6 +543,52 @@ static int _clock_swap_out_victim(struct mm_struct *mm, struct Page **ptr_page, 
 
 
 #### 5.练习5：阅读代码和实现手册，理解页表映射方式相关知识（思考题）
+
+>*如果我们采用“一个大页”的页表映射方式，相比分级页表，有什么好处、优势，有什么坏处、风险？*
+
+使用一个大页的页表映射方式与传统的分级页表映射方式相比，存在一系列明显的优势和劣势。以下是详细的分析：
+
+#### 优势与好处：
+
+1. **简化内存管理**  
+   采用一个大页方式时，页表结构显著简化。由于只有一个页表，管理过程较为直接，避免了多级页表结构中的复杂计算和多次查找过程，降低了实现和维护的复杂性。
+
+2. **减少内存访问延迟**  
+   在采用一个大页的情况下，通常只需要一次页表查找就能映射到整个内存区域。相较于分级页表需要多次查找，单一页表结构可以减少查找时间，从而加快内存访问速度，降低延迟。
+
+3. **提高TLB命中率**  
+   大页的物理内存区域比普通页大，因此可以减少翻译后备缓冲区（TLB）的缺失。每次TLB命中的地址范围更广，减少了TLB未命中时的页面访问开销，从而提升整体系统性能。
+
+4. **优化连续内存分配**  
+   对于需要大量连续内存的应用程序，大页可以减少页表条目的数量并简化内存分配，使得操作系统在进行内存分配时更具优势，尤其是对大数据集或高性能计算任务，表现更为优异。
+
+5. **降低TLB缺失的概率**  
+   由于大页能够映射较大的内存区域，一个TLB条目能容纳更多的内存页面，这样当处理连续内存区域时，可以显著降低TLB未命中的次数，从而优化程序性能。
+
+#### 坏处与风险：
+
+1. **内存浪费与碎片化**  
+   大页的一个显著劣势是内存的浪费。如果应用程序只需要使用大页的一部分，那么未使用的内存空间就会被浪费，这会导致内存碎片化。在长期运行中，随着碎片的积累，系统可能会变得效率低下。
+
+2. **灵活性差**  
+   大页的内存映射方式适用于需要大规模内存的应用，但对于内存需求较小的应用，大页并不高效。在这些情况下，分配一个比实际需求更大的内存区域可能导致内存资源的低效使用。
+
+3. **增加内存压力**  
+   大页要求操作系统为每个大页分配大量的连续内存，这对内存管理系统带来了更大的压力。尤其是在内存紧张的环境中，分配足够大的连续内存可能变得困难，进而影响到系统的整体性能。
+
+4. **较高的置换成本**  
+   当内存需要进行页交换时，大页的替换代价较高。由于大页涵盖了更多的数据，当一个大页需要从内存中被置换出时，可能需要处理更多的数据，从而造成较大的置换开销。
+
+5. **兼容性问题**  
+   并非所有硬件和操作系统都支持大页内存映射。部分较老的硬件和操作系统可能不具备对大页的优化支持，因此使用大页可能会遭遇兼容性问题，甚至导致系统性能无法达到预期。
+
+6. **潜在的安全风险**  
+   由于大页覆盖的内存区域较大，这可能会使得内存中某些区域暴露给潜在的恶意软件。如果没有充分的内存保护和隔离机制，攻击者可能通过大页的映射方式来获得不必要的访问权限，进而影响系统的安全性。
+
+
+**综上所述**：使用大页映射方式虽然在某些特定场景下能够带来显著的性能提升，但也伴随有一定的内存浪费、兼容性、以及管理上的挑战。在实际设计和选择页表映射方式时，需要综合考虑应用需求、硬件支持及操作系统的特点。
+
+#### 6.扩展练习Challenge：实现不考虑实现开销和效率的LRU页替换算法（需要编程）
 ##### 各函数解析
 1. _lru_init_mm
    ```c
@@ -602,34 +648,34 @@ static int _clock_swap_out_victim(struct mm_struct *mm, struct Page **ptr_page, 
 为 LRU 选择受害者页面提供依据，使用次数少的页面会被优先置换。
 
 4. _lru_swap_out_victim
-```c
-static int _lru_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick) {
-    list_entry_t *head = (list_entry_t*) mm->sm_priv; // 获取链表头
-    list_entry_t *le = head->next;                   // 遍历链表
-    int min = 9999;                                  // 初始化最小使用次数
-    struct Page *victim_page = NULL;
-
-    // 遍历链表找到使用次数最少的页面
-    while (le != head) {
-        struct Page *p = le2page(le, pra_page_link); // 获取页面
-        int index = (int)(p->pra_vaddr / PGSIZE);   // 计算页面索引
-        if (lru_use[index] < min) {
-            min = lru_use[index];
-            victim_page = p;
-        }
-        le = le->next;
-    }
-
-    if (victim_page != NULL) {
-        *ptr_page = victim_page;                      // 设置受害者页面
-        list_del(&(victim_page->pra_page_link));      // 从链表中移除
-        lru_use[(int)(victim_page->pra_vaddr / PGSIZE)] = 9999; // 重置使用状态
-        return 0;
-    }
-
-    return -1;  // 未找到页面
-}
-```
+   ```c
+   static int _lru_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick) {
+       list_entry_t *head = (list_entry_t*) mm->sm_priv; // 获取链表头
+       list_entry_t *le = head->next;                   // 遍历链表
+       int min = 9999;                                  // 初始化最小使用次数
+       struct Page *victim_page = NULL;
+   
+       // 遍历链表找到使用次数最少的页面
+       while (le != head) {
+           struct Page *p = le2page(le, pra_page_link); // 获取页面
+           int index = (int)(p->pra_vaddr / PGSIZE);   // 计算页面索引
+           if (lru_use[index] < min) {
+               min = lru_use[index];
+               victim_page = p;
+           }
+           le = le->next;
+       }
+   
+       if (victim_page != NULL) {
+           *ptr_page = victim_page;                      // 设置受害者页面
+           list_del(&(victim_page->pra_page_link));      // 从链表中移除
+           lru_use[(int)(victim_page->pra_vaddr / PGSIZE)] = 9999; // 重置使用状态
+           return 0;
+       }
+   
+       return -1;  // 未找到页面
+   }
+   ```
 
 功能：选择最久未使用的页面作为受害者页面。
 
@@ -653,11 +699,11 @@ static int _lru_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, i
 每次访问后，页面被插入到页面置换链表中，并将 lru_use 更新为 1。
 - 数据状态：
 
-```
-lru_use = [9999, 1, 1, 1, 1, 9999, ...]
-             ^    ^   ^   ^   ^
-            无  0x1000 0x2000 0x3000 0x4000
-```
+   ```
+   lru_use = [9999, 1, 1, 1, 1, 9999, ...]
+                ^    ^   ^   ^   ^
+               无  0x1000 0x2000 0x3000 0x4000
+   ```
 
 页面 0x3000、0x1000、0x4000、0x2000 的使用次数均为 1。
 其索引按 (虚拟地址 / PGSIZE) 对应数组位置。
@@ -665,34 +711,31 @@ lru_use = [9999, 1, 1, 1, 1, 9999, ...]
 3. 触发页面置换
 - 行为：访问页面 0x5000 时，触发缺页中断（page fault）：
 
-```
-Store/AMO page fault
-page fault at 0x00005000: K/W
-```
+   ```
+   Store/AMO page fault
+   page fault at 0x00005000: K/W
+   ```
 
 新的页面 0x5000 需要加载，但内存已满（超过可用页面数）。
 触发页面置换，_lru_swap_out_victim 开始从链表中寻找受害者：
 
 遍历链表，比较 lru_use 数组：
 
-```
-p->pra_vaddr 4000, index 4, use_times 1
-p->pra_vaddr 3000, index 3, use_times 1
-p->pra_vaddr 2000, index 2, use_times 1
-p->pra_vaddr 1000, index 1, use_times 1
-```
-
-```
-min_index 1, min 1
-```
+   ```
+      p->pra_vaddr 4000, index 4, use_times 1
+      p->pra_vaddr 3000, index 3, use_times 1
+      p->pra_vaddr 2000, index 2, use_times 1
+      p->pra_vaddr 1000, index 1, use_times 1
+      min_index 1, min 1
+   ```
 
 页面 0x1000（索引 1，use_times = 1）被选择为受害者。
 - 数据状态：
-```
-lru_use = [9999, 9999, 1, 1, 1, 1, ...]
-             ^    ^   ^   ^   ^
-            无  被换出 0x2000 0x3000 0x4000 0x5000
-```
+   ```
+   lru_use = [9999, 9999, 1, 1, 1, 1, ...]
+                ^    ^   ^   ^   ^
+               无  被换出 0x2000 0x3000 0x4000 0x5000
+   ```
 
 4. 页面访问与多次置换
 - 行为：
@@ -710,30 +753,34 @@ lru_use = [9999, 9999, 1, 1, 1, 1, ...]
    ```
 
 页面 0x2000 使用次数变为 6。
+
 - 行为：
 访问页面 0x1000 时，发生缺页中断（页面已换出）：
+
    ```
-Store/AMO page fault
-page fault at 0x00001000: K/W
-min_index 3, min 1
+   Store/AMO page fault
+   page fault at 0x00001000: K/W
+   min_index 3, min 1
    ```
 
 遍历链表，选择 lru_use 最小的页面：
 
    ```
-p->pra_vaddr 3000, index 3, use_times 1
+   p->pra_vaddr 3000, index 3, use_times 1
    ```
 
 页面 0x3000 被换出，页面 0x1000 被换入。
 - 数据状态：
+  
    ```
-lru_use = [9999, 1, 6, 9999, 1, 1, ...]
-             ^   ^   ^   ^    ^   ^
-            无  0x1000 0x2000 被换出 0x4000 0x5000
+   lru_use = [9999, 1, 6, 9999, 1, 1, ...]
+                ^   ^   ^   ^    ^   ^
+               无  0x1000 0x2000 被换出 0x4000 0x5000
    ```
 5. 页面访问验证
 - 行为：
 访问页面 0x6000，导致新的页面置换：
+
    ```
    Store/AMO page fault
    page fault at 0x00003000: K/W
@@ -742,10 +789,11 @@ lru_use = [9999, 1, 6, 9999, 1, 1, ...]
 
 选择 lru_use = 1 的页面 0x4000 作为受害者。
 页面 0x6000 替换 0x4000 后的状态：
+
    ```
-lru_use = [9999, 1, 6, 9999, 9999, 1, 1, ...]
-             ^   ^   ^   ^     ^    ^   ^
-            无  0x1000 0x2000 被换出 被换出 0x5000 0x6000
+      lru_use = [9999, 1, 6, 9999, 9999, 1, 1, ...]
+                   ^   ^   ^   ^     ^    ^   ^
+                  无  0x1000 0x2000 被换出 被换出 0x5000 0x6000
    ```
 
 6.总结：`lru_use` 状态随操作的变化
@@ -763,55 +811,9 @@ lru_use = [9999, 1, 6, 9999, 9999, 1, 1, ...]
 
 通过观察 `lru_use` 的变化，可以清晰地说明：
 
-1. 页面的使用次数在访问时递增。
-2. 当内存不足时，选择 `lru_use` 最小的页面置换。
-3. 被换出的页面对应的 `lru_use` 被重置为 `9999`，表示已移出链表。
-
-
->*如果我们采用“一个大页”的页表映射方式，相比分级页表，有什么好处、优势，有什么坏处、风险？*
-
-使用一个大页的页表映射方式与传统的分级页表映射方式相比，存在一系列明显的优势和劣势。以下是详细的分析：
-
-#### 优势与好处：
-
-1. **简化内存管理**  
-   采用一个大页方式时，页表结构显著简化。由于只有一个页表，管理过程较为直接，避免了多级页表结构中的复杂计算和多次查找过程，降低了实现和维护的复杂性。
-
-2. **减少内存访问延迟**  
-   在采用一个大页的情况下，通常只需要一次页表查找就能映射到整个内存区域。相较于分级页表需要多次查找，单一页表结构可以减少查找时间，从而加快内存访问速度，降低延迟。
-
-3. **提高TLB命中率**  
-   大页的物理内存区域比普通页大，因此可以减少翻译后备缓冲区（TLB）的缺失。每次TLB命中的地址范围更广，减少了TLB未命中时的页面访问开销，从而提升整体系统性能。
-
-4. **优化连续内存分配**  
-   对于需要大量连续内存的应用程序，大页可以减少页表条目的数量并简化内存分配，使得操作系统在进行内存分配时更具优势，尤其是对大数据集或高性能计算任务，表现更为优异。
-
-5. **降低TLB缺失的概率**  
-   由于大页能够映射较大的内存区域，一个TLB条目能容纳更多的内存页面，这样当处理连续内存区域时，可以显著降低TLB未命中的次数，从而优化程序性能。
-
-#### 坏处与风险：
-
-1. **内存浪费与碎片化**  
-   大页的一个显著劣势是内存的浪费。如果应用程序只需要使用大页的一部分，那么未使用的内存空间就会被浪费，这会导致内存碎片化。在长期运行中，随着碎片的积累，系统可能会变得效率低下。
-
-2. **灵活性差**  
-   大页的内存映射方式适用于需要大规模内存的应用，但对于内存需求较小的应用，大页并不高效。在这些情况下，分配一个比实际需求更大的内存区域可能导致内存资源的低效使用。
-
-3. **增加内存压力**  
-   大页要求操作系统为每个大页分配大量的连续内存，这对内存管理系统带来了更大的压力。尤其是在内存紧张的环境中，分配足够大的连续内存可能变得困难，进而影响到系统的整体性能。
-
-4. **较高的置换成本**  
-   当内存需要进行页交换时，大页的替换代价较高。由于大页涵盖了更多的数据，当一个大页需要从内存中被置换出时，可能需要处理更多的数据，从而造成较大的置换开销。
-
-5. **兼容性问题**  
-   并非所有硬件和操作系统都支持大页内存映射。部分较老的硬件和操作系统可能不具备对大页的优化支持，因此使用大页可能会遭遇兼容性问题，甚至导致系统性能无法达到预期。
-
-6. **潜在的安全风险**  
-   由于大页覆盖的内存区域较大，这可能会使得内存中某些区域暴露给潜在的恶意软件。如果没有充分的内存保护和隔离机制，攻击者可能通过大页的映射方式来获得不必要的访问权限，进而影响系统的安全性。
-
-
-**综上所述**：使用大页映射方式虽然在某些特定场景下能够带来显著的性能提升，但也伴随有一定的内存浪费、兼容性、以及管理上的挑战。在实际设计和选择页表映射方式时，需要综合考虑应用需求、硬件支持及操作系统的特点。
-
+- 页面的使用次数在访问时递增。
+-  当内存不足时，选择 `lru_use` 最小的页面置换。
+- 被换出的页面对应的 `lru_use` 被重置为 `9999`，表示已移出链表。
 
 ---
 ### 三、实验中的知识点
@@ -870,4 +872,5 @@ lru_use = [9999, 1, 6, 9999, 9999, 1, 1, ...]
   - **缺点：** 由于要同时考虑访问位和修改位，算法实现相对复杂，可能需要多次扫描才能找到最合适的页面进行淘汰，导致一定的执行开销。
 
 这些页替换算法各有优缺点，适用于不同的场景。一般来说，在有较强局部性访问模式的应用中，LRU 和时钟算法表现较好；而在资源受限的情况下，FIFO 和时钟算法因其实现简单和开销小而被广泛应用。
+
 
