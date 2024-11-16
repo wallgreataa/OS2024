@@ -543,6 +543,230 @@ static int _clock_swap_out_victim(struct mm_struct *mm, struct Page **ptr_page, 
 
 
 #### 5.练习5：阅读代码和实现手册，理解页表映射方式相关知识（思考题）
+##### 各函数解析
+1. _lru_init_mm
+   ```c
+   static int _lru_init_mm(struct mm_struct* mm) {
+       list_init(&pra_list_head);        // 初始化链表
+       mm->sm_priv = &pra_list_head;    // 将链表绑定到内存管理结构
+       for (int i = 0; i < 100; i++) {
+           lru_use[i] = 9999;           // 初始化所有页面为未使用状态
+       }
+       return 0;
+   }
+   ```
+   
+功能：初始化页面置换算法。
+
+操作：
+初始化全局的链表 pra_list_head，用于管理可交换页面。
+将 pra_list_head 与当前进程的内存管理结构 mm 关联。
+将 lru_use 数组中每个页面的使用次数设为 9999，表示页面未使用。
+
+2. _lru_map_swappable
+   ```c
+   static int _lru_map_swappable(struct mm_struct* mm, uintptr_t addr, struct Page* page, int swap_in) {
+       list_entry_t* head = (list_entry_t*) mm->sm_priv; // 获取页面置换链表
+       list_entry_t* entry = &(page->pra_page_link);     // 获取页面链表节点
+       assert(entry != NULL && head != NULL);
+       list_add(head, entry);                            // 将页面加入链表
+       return 0;
+   }
+   ```
+
+功能：将页面标记为可交换，并加入页面置换链表。
+
+操作：
+将页面对应的链表节点 entry 添加到链表 pra_list_head。
+页面被添加到链表后，表示它成为了页面置换算法的候选页面。
+注意：
+这里并未更新 lru_use 数组，假设页面使用情况在访问时更新。
+3. _page_use
+   ```c
+   static int _page_use(uintptr_t pra_vaddr) {
+       cprintf("pra_vaddr %x comes into use\n", pra_vaddr);
+       if (lru_use[(int)(pra_vaddr / PGSIZE)] == 9999)
+           lru_use[(int)(pra_vaddr / PGSIZE)] = 1; // 页面第一次使用
+       else
+           lru_use[(int)(pra_vaddr / PGSIZE)]++;  // 增加页面使用次数
+       return 0;
+   }
+   ```
+
+功能：记录页面的访问情况，更新使用次数。
+
+操作：
+如果页面是第一次使用（lru_use == 9999），将其使用次数设为 1。
+否则，将页面的使用次数递增。
+作用：
+为 LRU 选择受害者页面提供依据，使用次数少的页面会被优先置换。
+
+4. _lru_swap_out_victim
+```c
+static int _lru_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick) {
+    list_entry_t *head = (list_entry_t*) mm->sm_priv; // 获取链表头
+    list_entry_t *le = head->next;                   // 遍历链表
+    int min = 9999;                                  // 初始化最小使用次数
+    struct Page *victim_page = NULL;
+
+    // 遍历链表找到使用次数最少的页面
+    while (le != head) {
+        struct Page *p = le2page(le, pra_page_link); // 获取页面
+        int index = (int)(p->pra_vaddr / PGSIZE);   // 计算页面索引
+        if (lru_use[index] < min) {
+            min = lru_use[index];
+            victim_page = p;
+        }
+        le = le->next;
+    }
+
+    if (victim_page != NULL) {
+        *ptr_page = victim_page;                      // 设置受害者页面
+        list_del(&(victim_page->pra_page_link));      // 从链表中移除
+        lru_use[(int)(victim_page->pra_vaddr / PGSIZE)] = 9999; // 重置使用状态
+        return 0;
+    }
+
+    return -1;  // 未找到页面
+}
+```
+
+功能：选择最久未使用的页面作为受害者页面。
+
+操作：
+遍历页面置换链表 pra_list_head，找出 lru_use 中使用次数最小的页面。
+将受害者页面从链表中移除，并重置其使用状态为 9999。
+作用：
+实现核心的 LRU 置换策略，通过记录和比较页面使用次数，选出最久未使用的页面。
+
+##### 输出内容分析
+
+1. 初始状态
+在页面访问之前，lru_use 数组初始化为 9999（表示未使用）。
+- 数据状态：
+   ```
+   lru_use = [9999, 9999, 9999, 9999, 9999, 9999, ...]
+   ```
+2. 页面访问与插入
+
+- 行为：按顺序访问虚拟地址 0x3000、0x1000、0x4000 和 0x2000。
+每次访问后，页面被插入到页面置换链表中，并将 lru_use 更新为 1。
+- 数据状态：
+
+```
+lru_use = [9999, 1, 1, 1, 1, 9999, ...]
+             ^    ^   ^   ^   ^
+            无  0x1000 0x2000 0x3000 0x4000
+```
+
+页面 0x3000、0x1000、0x4000、0x2000 的使用次数均为 1。
+其索引按 (虚拟地址 / PGSIZE) 对应数组位置。
+
+3. 触发页面置换
+- 行为：访问页面 0x5000 时，触发缺页中断（page fault）：
+
+```
+Store/AMO page fault
+page fault at 0x00005000: K/W
+```
+
+新的页面 0x5000 需要加载，但内存已满（超过可用页面数）。
+触发页面置换，_lru_swap_out_victim 开始从链表中寻找受害者：
+
+遍历链表，比较 lru_use 数组：
+
+```
+p->pra_vaddr 4000, index 4, use_times 1
+p->pra_vaddr 3000, index 3, use_times 1
+p->pra_vaddr 2000, index 2, use_times 1
+p->pra_vaddr 1000, index 1, use_times 1
+```
+
+```
+min_index 1, min 1
+```
+
+页面 0x1000（索引 1，use_times = 1）被选择为受害者。
+- 数据状态：
+```
+lru_use = [9999, 9999, 1, 1, 1, 1, ...]
+             ^    ^   ^   ^   ^
+            无  被换出 0x2000 0x3000 0x4000 0x5000
+```
+
+4. 页面访问与多次置换
+- 行为：
+访问页面 0x2000 多次后，其 use_times 增加：
+   ```
+   pra_vaddr 2000 comes into use
+   pra_vaddr 2000 comes into use
+   ...
+   ```
+- 数据状态：
+   ```
+     lru_use = [9999, 9999, 6, 1, 1, 1, ...]
+                ^    ^   ^   ^   ^   ^
+               无  被换出 0x2000 0x3000 0x4000 0x5000
+   ```
+
+页面 0x2000 使用次数变为 6。
+- 行为：
+访问页面 0x1000 时，发生缺页中断（页面已换出）：
+   ```
+Store/AMO page fault
+page fault at 0x00001000: K/W
+min_index 3, min 1
+   ```
+
+遍历链表，选择 lru_use 最小的页面：
+
+   ```
+p->pra_vaddr 3000, index 3, use_times 1
+   ```
+
+页面 0x3000 被换出，页面 0x1000 被换入。
+- 数据状态：
+   ```
+lru_use = [9999, 1, 6, 9999, 1, 1, ...]
+             ^   ^   ^   ^    ^   ^
+            无  0x1000 0x2000 被换出 0x4000 0x5000
+   ```
+5. 页面访问验证
+- 行为：
+访问页面 0x6000，导致新的页面置换：
+   ```
+   Store/AMO page fault
+   page fault at 0x00003000: K/W
+   min_index 4, min 1
+   ```
+
+选择 lru_use = 1 的页面 0x4000 作为受害者。
+页面 0x6000 替换 0x4000 后的状态：
+   ```
+lru_use = [9999, 1, 6, 9999, 9999, 1, 1, ...]
+             ^   ^   ^   ^     ^    ^   ^
+            无  0x1000 0x2000 被换出 被换出 0x5000 0x6000
+   ```
+
+6.总结：`lru_use` 状态随操作的变化
+
+以下是 `lru_use` 数组在不同阶段的状态变化：
+
+   | 阶段       | 页面访问或置换      | `lru_use` 状态                                              |
+   |------------|---------------------|------------------------------------------------------------|
+   | 初始状态   | 无                  | `[9999, 9999, 9999, 9999, 9999, 9999, ...]`                |
+   | 第一轮访问 | `0x3000, 0x1000...` | `[9999, 1, 1, 1, 1, 9999, ...]`                            |
+   | 第一次置换 | `0x5000`            | `[9999, 9999, 1, 1, 1, 1, ...]`                            |
+   | 多次访问   | `0x2000`            | `[9999, 9999, 6, 1, 1, 1, ...]`                            |
+   | 第二次置换 | `0x1000`            | `[9999, 1, 6, 9999, 1, 1, ...]`                            |
+   | 第三次置换 | `0x6000`            | `[9999, 1, 6, 9999, 9999, 1, 1, ...]`                      |
+
+通过观察 `lru_use` 的变化，可以清晰地说明：
+
+1. 页面的使用次数在访问时递增。
+2. 当内存不足时，选择 `lru_use` 最小的页面置换。
+3. 被换出的页面对应的 `lru_use` 被重置为 `9999`，表示已移出链表。
+
 
 >*如果我们采用“一个大页”的页表映射方式，相比分级页表，有什么好处、优势，有什么坏处、风险？*
 
