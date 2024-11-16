@@ -208,7 +208,7 @@
 > - 如果ucore的缺页服务例程在执行过程中访问内存，出现了页访问异常，请问硬件要做哪些事情？
 > - 数据结构Page的全局变量（其实是一个数组）的每一项与页表中的页目录项和页表项有无对应关系？如果有，其对应关系是啥？
 
-在 `do_pgfault` 函数中，处理缺页错误（Page Fault）时，关键的操作是通过页表项（PTE）查找虚拟地址对应的物理页面，若没有对应的物理页面，则可能会进行页面换入操作（swap）。你在 `do_pgfault` 函数中需要补充代码的部分涉及到 **交换页面的加载** 和 **页面映射**。具体来说：
+在 `do_pgfault` 函数中，处理缺页错误（Page Fault）时，关键的操作是通过页表项（PTE）查找虚拟地址对应的物理页面，若没有对应的物理页面，则可能会进行页面换入操作（swap）。在 `do_pgfault` 函数中需要补充代码的部分涉及到 **交换页面的加载** 和 **页面映射**。具体来说：
 
 1. **查找页表项**：
    
@@ -448,7 +448,7 @@
    ```c
    static int _clock_init_mm(struct mm_struct *mm)
    {     
-       /*LAB3 EXERCISE 4: 2113997*/ 
+       /*LAB3 EXERCISE 4: 2212789*/ 
        // 初始化pra_list_head为空链表
        // 初始化当前指针curr_ptr指向pra_list_head，表示当前页面替换位置为链表头
        // 将mm的私有成员指针指向pra_list_head，用于后续的页面替换算法操作
@@ -473,7 +473,7 @@
        
        assert(entry != NULL && curr_ptr != NULL);
        // 记录页面访问情况
-       /*LAB3 EXERCISE 4: 2113997*/ 
+       /*LAB3 EXERCISE 4: 2212789*/ 
        // 将页面page插入到页面链表pra_list_head的末尾
        // 将页面的visited标志置为1，表示该页面已被访问
        list_entry_t *head = (list_entry_t*) mm->sm_priv;
@@ -498,7 +498,7 @@
        // (1) 遍历链表，查找最早的未被访问页面
        // (2) 如果找到未被访问的页面，则从链表中删除该页面，并将其地址赋给ptr_page作为换出页面
        while (1) {
-           /*LAB3 EXERCISE 4: 2113997*/ 
+           /*LAB3 EXERCISE 4: 2212789*/ 
            // 编写代码：遍历链表pra_list_head，查找未被访问的页面
            if (curr_ptr == head) {
                curr_ptr = list_prev(curr_ptr);
