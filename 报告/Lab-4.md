@@ -174,51 +174,52 @@ if (nr_process >= MAX_PROCESS) {
 
 - 分配进程控制块
   
-调用 alloc_proc() 函数分配一个新的 proc_struct，即新进程的控制块。如果分配失败，proc 将是 NULL，此时我们需要清理资源并返回错误。
+调用 `alloc_proc()` 函数分配一个新的 `proc_struct`，即新进程的控制块。如果分配失败，`proc` 将是 NULL，此时我们需要清理资源并返回错误。
 ```c
 proc = alloc_proc();
 if (proc == NULL) {
     goto bad_fork_cleanup_kstack;
 ```
-alloc_proc() 负责为新进程分配一块内存，并初始化进程的基本信息，例如进程状态、优先级、指向内核栈的指针等。如果分配失败，我们会跳转到错误处理部分 bad_fork_cleanup_kstack 来释放资源。
+`alloc_proc()` 负责为新进程分配一块内存，并初始化进程的基本信息，例如进程状态、优先级、指向内核栈的指针等。如果分配失败，我们会跳转到错误处理部分 `bad_fork_cleanup_kstack` 来释放资源。
 
 - 分配唯一的进程 ID
-为新进程分配一个唯一的进程 ID（PID）。这里使用 get_pid() 函数为新进程生成一个唯一的 PID。生成的 PID 被存储在 proc->pid 中。
+  
+为新进程分配一个唯一的进程 `ID（PID）`。这里使用 `get_pid()` 函数为新进程生成一个唯一的 `PID`。生成的 `PID` 被存储在 `proc->pid` 中。
 ```c
 proc->pid = get_pid();
 ```
 
 - 为新进程分配内核栈
 
-调用 setup_kstack(proc) 为新进程分配一个内核栈。每个进程都需要一个内核栈来保存其内核态执行的上下文。
+调用 `setup_kstack(proc)` 为新进程分配一个内核栈。每个进程都需要一个内核栈来保存其内核态执行的上下文。
 ```c
 setup_kstack(proc);
 ```
 
 - 复制父进程的内存管理信息
 
-根据 clone_flags 参数，判断是共享父进程的内存管理信息（CLONE_VM）还是复制一份新的内存空间。这里调用 copy_mm(clone_flags, proc) 来完成内存管理信息的复制或共享。如果复制失败，我们需要清理资源并返回错误。
+根据 `clone_flags` 参数，判断是共享父进程的内存管理信息（CLONE_VM）还是复制一份新的内存空间。这里调用 `copy_mm(clone_flags, proc)` 来完成内存管理信息的复制或共享。如果复制失败，我们需要清理资源并返回错误。
 ```c
 if (copy_mm(clone_flags, proc) != 0) {
     goto bad_fork_cleanup_proc;
 }
 ```
 
-copy_mm() 函数根据 clone_flags 决定是否进行内存管理信息的共享或复制。如果是线程创建，可能只需要共享内存（CLONE_VM），否则就需要为新进程分配独立的内存。
+`copy_mm()` 函数根据 `clone_flags` 决定是否进行内存管理信息的共享或复制。如果是线程创建，可能只需要共享内存（CLONE_VM），否则就需要为新进程分配独立的内存。
 
 - 复制父进程的上下文
 
-调用 copy_thread(proc, stack, tf) 将父进程的上下文（包括 trapframe 和寄存器值等）复制到新进程中。在 copy_thread() 函数中，父进程的 trapframe 会被复制到新进程的内核栈中，并且设置新进程的内核入口点。
+调用 `copy_thread(proc, stack, tf)` 将父进程的上下文（包括 `trapframe` 和寄存器值等）复制到新进程中。在 `copy_thread()` 函数中，父进程的 `trapframe` 会被复制到新进程的内核栈中，并且设置新进程的内核入口点。
 ```c
 copy_thread(proc, stack, tf);
 ```
 
 
-trapframe 存储了当前进程的寄存器状态，包含程序计数器、堆栈指针等。copy_thread() 会将这些信息复制到新进程的内核栈中，确保新进程从正确的位置继续执行。
+`trapframe` 存储了当前进程的寄存器状态，包含程序计数器、堆栈指针等。`copy_thread()` 会将这些信息复制到新进程的内核栈中，确保新进程从正确的位置继续执行。
 
 - 将新进程加入进程列表和哈希表
 
-调用 hash_proc(proc) 将新进程加入进程的哈希表，并调用 list_add(&proc_list, &(proc->list_link)) 将新进程加入到进程队列 proc_list 中。
+调用 `hash_proc(proc)` 将新进程加入进程的哈希表，并调用 `list_add(&proc_list, &(proc->list_link))` 将新进程加入到进程队列 `proc_list` 中。
 ```c
 hash_proc(proc);
 list_add(&proc_list, &(proc->list_link));
@@ -228,7 +229,7 @@ list_add(&proc_list, &(proc->list_link));
 
 - 唤醒新进程
 
-调用 wakeup_proc(proc) 将新进程的状态设置为 PROC_RUNNABLE，表示新进程已经准备好并且可以被调度器调度执行。
+调用 `wakeup_proc(proc)` 将新进程的状态设置为 `PROC_RUNNABLE`，表示新进程已经准备好并且可以被调度器调度执行。
 ```c
 wakeup_proc(proc);
 ```
@@ -238,8 +239,8 @@ wakeup_proc(proc);
 错误处理
 在进程创建的过程中，可能会发生内存分配失败、内存管理复制失败等错误。因此，错误处理非常重要。
 
-如果 alloc_proc() 失败，我们释放已经分配的内核栈并返回。
-如果 copy_mm() 失败，我们释放进程控制块并返回。
+如果 `alloc_proc()` 失败，我们释放已经分配的内核栈并返回。
+如果 `copy_mm()` 失败，我们释放进程控制块并返回。
 这些错误处理确保了系统资源不会泄漏，并且如果创建进程失败，系统可以稳定运行。
 ```c
 bad_fork_cleanup_kstack:
@@ -251,7 +252,7 @@ bad_fork_cleanup_proc:
 
 - 返回新进程的 PID
 
-最后，do_fork 函数返回新进程的 PID。这个 PID 是通过 get_pid() 获取的，确保每个进程在系统中的标识是唯一的。
+最后，`do_fork` 函数返回新进程的 `PID`。这个 `PID` 是通过 `get_pid()` 获取的，确保每个进程在系统中的标识是唯一的。
 ```c
 ret = proc->pid;
 ```
