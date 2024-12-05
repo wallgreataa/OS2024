@@ -271,15 +271,60 @@ proc_run用于将指定的进程切换到CPU上运行。它的大致执行步骤
 - 实现上下文切换。`/kern/process`中已经预先编写好了`switch.S`，其中定义了`switch_to()`函数。可实现两个进程的context切换。
 - 允许中断。
 
+#### 1. proc_run函数
+
+根据文档提示，编写 `proc_run()` 函数如下：
+
+```c++
+void proc_run(struct proc_struct *proc) {
+    if (proc != current) {
+        // LAB4:EXERCISE3 2212789
+        /*
+        * 以下是可以在实现中使用的一些宏、函数和定义：
+        * 宏或函数：
+        *   local_intr_save():        禁用中断
+        *   local_intr_restore():     启用中断
+        *   lcr3():                   修改 CR3 寄存器的值
+        *   switch_to():              在两个进程之间进行上下文切换
+        */
+       bool intr_flag;
+       struct proc_struct *prev = current, *next = proc;
+       local_intr_save(intr_flag);
+       {
+            current = proc;
+            lcr3(next->cr3);
+            switch_to(&(prev->context), &(next->context));
+       }
+       local_intr_restore(intr_flag);
+    }
+}
+```
+
+此函数的**基本思路**如下：
+
+- 将 `current` 指向目标进程 `next`，即切换当前执行的进程。
+- 设置 CR3 寄存器的值为目标进程 `next` 的页目录表的起始地址 `next->cr3`，这实际上完成了进程间的页表切换。
+- 通过 `switch_to` 函数实现两个进程的上下文切换，即切换寄存器的值。当 `switch_to` 执行完毕并返回时，控制权会转移到目标进程 `initproc`。
+
+需要注意的是，在这里使用了 `local_intr_save()` 和 `local_intr_restore()`两个函数，它们分别用于禁用和启用中断。这是为了防止在进程切换的过程中被其他中断打断，确保进程切换的过程不受干扰。
+
 请回答如下问题：
 
-- 在本实验的执行过程中，创建且运行了几个内核线程？
+- **在本实验的执行过程中，创建且运行了几个内核线程？**
 
 完成代码编写后，编译并运行代码：make qemu
 
 如果可以得到如 附录A所示的显示内容（仅供参考，不是标准答案输出），则基本正确。
 
 **回答：**
+
+#### 2. 内核线程
+
+在本实验中，创建并运行了两个内核线程：
+
+- **idleproc**：第一个内核进程，负责完成内核中各个子系统的初始化，初始化完成后，立即调度执行其他进程。
+- **initproc**：在这个实验中用于完成实验功能的内核进程，通过调度执行。
+
 
 ### 扩展练习Challenge：
 
